@@ -15,5 +15,5 @@ Inputs are fixed to:
 Run from the `bench/` directory:
 
 ```sh
-go test -bench . -run ^$
+go test -bench .
 ```

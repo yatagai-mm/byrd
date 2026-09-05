@@ -44,7 +44,6 @@ func BenchmarkDecode(b *testing.B) {
 	for _, path := range files {
 		base := trimExt(filepath.Base(path))
 		for _, dec := range decoders {
-			dec := dec
 			b.Run(dec.name+"/"+base, func(b *testing.B) {
 				size := mustStatBenchmarkFile(b, path)
 				warm, err := dec.fn(path)
