@@ -5,7 +5,7 @@ package header
 import (
 	"bufio"
 	"fmt"
-	"github.com/kota-yata/byrd-mp3/internal/common"
+	"github.com/yatagai-mm/byrd/internal/common"
 	"io"
 )
 

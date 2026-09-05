@@ -3,9 +3,9 @@ package stereo
 import (
 	"fmt"
 
-	"github.com/kota-yata/byrd-mp3/internal/common"
-	"github.com/kota-yata/byrd-mp3/internal/header"
-	"github.com/kota-yata/byrd-mp3/internal/maindata"
+	"github.com/yatagai-mm/byrd/internal/common"
+	"github.com/yatagai-mm/byrd/internal/header"
+	"github.com/yatagai-mm/byrd/internal/maindata"
 )
 
 const MS_STEREO_SCALE float32 = 0.70710677 // 1 / sqrt(2)

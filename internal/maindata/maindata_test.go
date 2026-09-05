@@ -2,7 +2,7 @@ package maindata
 
 import (
 	"bytes"
-	"github.com/kota-yata/byrd-mp3/internal/common"
+	"github.com/yatagai-mm/byrd/internal/common"
 	"testing"
 )
 

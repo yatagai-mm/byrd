@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	byrd "github.com/kota-yata/byrd-mp3"
+	byrd "github.com/yatagai-mm/byrd"
 )
 
 func main() {

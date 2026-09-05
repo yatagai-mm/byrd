@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	byrd "github.com/kota-yata/byrd-mp3"
+	byrd "github.com/yatagai-mm/byrd"
 
 	refmp3 "github.com/hajimehoshi/go-mp3"
 )

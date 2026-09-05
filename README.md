@@ -6,10 +6,10 @@ Byrd allocates very less amount of memory per operation by reusing memory space 
 
 ### Usage
 ```bash
-go get github.com/kota-yata/byrd-mp3
+go get github.com/yatagai-mm/byrd
 ```
 ```go
-import byrd "github.com/kota-yata/byrd-mp3"
+import byrd "github.com/yatagai-mm/byrd"
 ```
 
 ```go

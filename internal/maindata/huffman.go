@@ -3,7 +3,7 @@ package maindata
 import (
 	"fmt"
 
-	"github.com/kota-yata/byrd-mp3/internal/common"
+	"github.com/yatagai-mm/byrd/internal/common"
 )
 
 func selectTable(sampleRate uint16, gc *common.GranuleChannelInfo, spectralLineIndex int) (*common.HuffmanTable, error) {

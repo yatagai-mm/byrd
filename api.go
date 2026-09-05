@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/kota-yata/byrd-mp3/internal/decoder"
+	"github.com/yatagai-mm/byrd/internal/decoder"
 )
 
 type PCMData struct {

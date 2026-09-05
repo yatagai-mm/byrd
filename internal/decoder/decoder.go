@@ -8,12 +8,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kota-yata/byrd-mp3/internal/common"
-	"github.com/kota-yata/byrd-mp3/internal/header"
-	"github.com/kota-yata/byrd-mp3/internal/hybrid"
-	"github.com/kota-yata/byrd-mp3/internal/maindata"
-	"github.com/kota-yata/byrd-mp3/internal/stereo"
-	"github.com/kota-yata/byrd-mp3/internal/synthesis"
+	"github.com/yatagai-mm/byrd/internal/common"
+	"github.com/yatagai-mm/byrd/internal/header"
+	"github.com/yatagai-mm/byrd/internal/hybrid"
+	"github.com/yatagai-mm/byrd/internal/maindata"
+	"github.com/yatagai-mm/byrd/internal/stereo"
+	"github.com/yatagai-mm/byrd/internal/synthesis"
 )
 
 const GRANULE_COUNT = 2
