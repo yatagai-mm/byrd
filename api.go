@@ -111,6 +111,7 @@ func (d *Decoder) Channels() int {
 	return d.r.Channels()
 }
 
+// BatchDecode puts the whole data on memory and decodes it. Much faster than Read(), but consumes much more memory.
 func (d *Decoder) BatchDecode() (*PCMData, error) {
 	raw, err := io.ReadAll(d)
 	if err != nil {
