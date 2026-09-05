@@ -71,16 +71,14 @@ goos: linux
 goarch: amd64
 pkg: byrd-bench
 cpu: AMD EPYC 7763 64-Core Processor                
-BenchmarkDecode/byrd/440hz-2                   1        1414838350 ns/op           0.56 MB/s    73397944 B/op   13512 allocs/op
-BenchmarkDecode/go-mp3/440hz-2                 1        1789270359 ns/op           0.45 MB/s    401718432 B/op  832091 allocs/op
-BenchmarkDecode/byrd/alarm-2                   2         563254048 ns/op           1.30 MB/s    17954744 B/op    4525 allocs/op
-BenchmarkDecode/go-mp3/alarm-2                 2         583913758 ns/op           1.26 MB/s    107437704 B/op  225285 allocs/op
-BenchmarkDecode/byrd/song-2                    1        2236068400 ns/op           1.85 MB/s    59609384 B/op   14919 allocs/op
-BenchmarkDecode/go-mp3/song-2                  1        2495641055 ns/op           1.66 MB/s    337330784 B/op  693343 allocs/op
-BenchmarkDecode/byrd/synth-2                   5         239184430 ns/op           1.29 MB/s     7939640 B/op    1904 allocs/op
-BenchmarkDecode/go-mp3/synth-2                 4         265875043 ns/op           1.16 MB/s    48806272 B/op  102876 allocs/op
-BenchmarkDecode/byrd/circle-reading-2                  1        83411402901 ns/op          1.02 MB/s    2376424176 B/op         618368 allocs/op
-BenchmarkDecode/go-mp3/circle-reading-2                1        82844266854 ns/op          1.03 MB/s    14913806760 B/op      31594024 allocs/op
+BenchmarkDecode/byrd/440hz-2                   1        1323001370 ns/op    0.60 MB/s     2168944 B/op      13479 allocs/op
+BenchmarkDecode/go-mp3/440hz-2                 1        2271381282 ns/op    0.35 MB/s    330489872 B/op    832058 allocs/op
+BenchmarkDecode/byrd/alarm-2                   2         627322754 ns/op    1.17 MB/s     1849712 B/op       4496 allocs/op
+BenchmarkDecode/go-mp3/alarm-2                 2         696010355 ns/op    1.05 MB/s    91336840 B/op     225257 allocs/op
+BenchmarkDecode/byrd/song-2                    1        2268860725 ns/op    1.83 MB/s     7639776 B/op      14887 allocs/op
+BenchmarkDecode/go-mp3/song-2                  1        2565913466 ns/op    1.61 MB/s    285370104 B/op    693316 allocs/op
+BenchmarkDecode/byrd/synth-2                   4         279689512 ns/op    1.10 MB/s      665382 B/op       1875 allocs/op
+BenchmarkDecode/go-mp3/synth-2                 3         333685004 ns/op    0.92 MB/s    41532210 B/op     102849 allocs/op
+BenchmarkDecode/byrd/circle-reading-2                  1        75109323119 ns/op          1.13 MB/s    216390816 B/op    618327 allocs/op
+BenchmarkDecode/go-mp3/circle-reading-2                1        93953570127 ns/op          0.91 MB/s    12753775648 B/op        31593989 allocs/op
 ```
-
-Byrd decodes mp3 with lower allocation bytes per op
