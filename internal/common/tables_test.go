@@ -3,24 +3,31 @@ package common
 import "testing"
 
 func TestBaseTables(t *testing.T) {
+	if got := BaseTables[0]; !got.IsZero || len(got.LUT) != 0 || got.LUTBits != 0 || got.Linbits != 0 {
+		t.Fatalf("table 0 got %+v, want zero table", got)
+	}
+
 	for i := 1; i <= 33; i++ {
-		if i >= len(BaseTables) {
-			t.Fatalf("baseTables missing key %d", i)
+		if i == 4 || i == 14 {
+			continue
+		}
+		if got := BaseTables[i]; len(got.LUT) == 0 || got.LUTBits == 0 || got.IsZero {
+			t.Fatalf("table %d got %+v, want non-empty LUT table", i, got)
 		}
 	}
 
-	if got := BaseTables[4]; got.Data != nil || got.TreeLen != 0 || got.Linbits != 0 {
-		t.Fatalf("table 4 got %+v, want nil data and linbits 0", got)
+	if got := BaseTables[4]; len(got.LUT) != 0 || got.LUTBits != 0 || got.Linbits != 0 || got.IsZero {
+		t.Fatalf("table 4 got %+v, want unsupported table", got)
 	}
-	if got := BaseTables[14]; got.Data != nil || got.TreeLen != 0 || got.Linbits != 0 {
-		t.Fatalf("table 14 got %+v, want nil data and linbits 0", got)
+	if got := BaseTables[14]; len(got.LUT) != 0 || got.LUTBits != 0 || got.Linbits != 0 || got.IsZero {
+		t.Fatalf("table 14 got %+v, want unsupported table", got)
 	}
 
-	if BaseTables[16].TreeLen != BaseTables[23].TreeLen {
-		t.Fatalf("table 16/23 tree length mismatch: %d vs %d", BaseTables[16].TreeLen, BaseTables[23].TreeLen)
+	if len(BaseTables[16].LUT) == 0 || &BaseTables[16].LUT[0] != &BaseTables[23].LUT[0] {
+		t.Fatalf("table 16/23 LUT table is not shared")
 	}
-	if BaseTables[24].TreeLen != BaseTables[31].TreeLen {
-		t.Fatalf("table 24/31 tree length mismatch: %d vs %d", BaseTables[24].TreeLen, BaseTables[31].TreeLen)
+	if len(BaseTables[24].LUT) == 0 || &BaseTables[24].LUT[0] != &BaseTables[31].LUT[0] {
+		t.Fatalf("table 24/31 LUT table is not shared")
 	}
 
 	for _, tc := range []struct {
@@ -41,23 +48,23 @@ func TestBaseTables(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		table int
-		first uint16
-		size  int
+		table    int
+		entries  int
+		rootBits uint8
 	}{
-		{1, 0x0201, 7},
-		{2, 0x0201, 17},
-		{16, 0x0201, 511},
-		{24, 0x3c01, 512},
-		{32, 0x0201, 31},
-		{33, 0x1001, 31},
+		{1, 8, 3},
+		{2, 64, 6},
+		{16, 662, 7},
+		{24, 414, 7},
+		{32, 64, 6},
+		{33, 16, 4},
 	} {
 		got := BaseTables[tc.table]
-		if got.TreeLen != tc.size {
-			t.Fatalf("table %d tree length got %d, want %d", tc.table, got.TreeLen, tc.size)
+		if len(got.LUT) != tc.entries {
+			t.Fatalf("table %d LUT entries got %d, want %d", tc.table, len(got.LUT), tc.entries)
 		}
-		if len(got.Data) == 0 || got.Data[0] != tc.first {
-			t.Fatalf("table %d first value got %#x, want %#x", tc.table, got.Data[0], tc.first)
+		if got.LUTBits != tc.rootBits {
+			t.Fatalf("table %d root bits got %d, want %d", tc.table, got.LUTBits, tc.rootBits)
 		}
 	}
 }
