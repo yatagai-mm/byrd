@@ -1,12 +1,13 @@
 package bench
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
-	byrd "github.com/kota-yata/byrd-mp3"
+	byrd "github.com/yatagai-mm/byrd"
 
 	refmp3 "github.com/hajimehoshi/go-mp3"
 )
@@ -16,14 +17,9 @@ type decodeResult struct {
 	samples      int
 }
 
-type decoderFunc func(string) (decodeResult, error)
+type decoderFunc func([]byte) (decodeResult, error)
 
 var sink decodeResult
-
-type testLogger interface {
-	Helper()
-	Fatalf(format string, args ...any)
-}
 
 func BenchmarkDecode(b *testing.B) {
 	files := []string{
@@ -42,12 +38,18 @@ func BenchmarkDecode(b *testing.B) {
 	}
 
 	for _, path := range files {
+		encoded, err := os.ReadFile(path)
+		if err != nil {
+			b.Fatalf("failed to read %s: %v", path, err)
+		}
+		if len(encoded) == 0 {
+			b.Fatalf("benchmark input is empty: %s", path)
+		}
+
 		base := trimExt(filepath.Base(path))
 		for _, dec := range decoders {
-			dec := dec
 			b.Run(dec.name+"/"+base, func(b *testing.B) {
-				size := mustStatBenchmarkFile(b, path)
-				warm, err := dec.fn(path)
+				warm, err := dec.fn(encoded)
 				if err != nil {
 					b.Fatalf("warmup decode failed: %v", err)
 				}
@@ -56,10 +58,10 @@ func BenchmarkDecode(b *testing.B) {
 				}
 
 				b.ReportAllocs()
-				b.SetBytes(size)
+				b.SetBytes(int64(len(encoded)))
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					res, err := dec.fn(path)
+					res, err := dec.fn(encoded)
 					if err != nil {
 						b.Fatalf("decode failed: %v", err)
 					}
@@ -70,61 +72,34 @@ func BenchmarkDecode(b *testing.B) {
 	}
 }
 
-func mustStatBenchmarkFile(t testLogger, path string) int64 {
-	t.Helper()
-
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatalf("failed to stat %s: %v", path, err)
-	}
-	if info.Size() == 0 {
-		t.Fatalf("benchmark input is empty: %s", path)
-	}
-	return info.Size()
-}
-
-func decodeWithByrd(path string) (decodeResult, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return decodeResult{}, err
-	}
-	defer f.Close()
-
-	dec, err := byrd.NewDecoder(f)
+func decodeWithByrd(encoded []byte) (decodeResult, error) {
+	dec, err := byrd.NewDecoder(bytes.NewReader(encoded))
 	if err != nil {
 		return decodeResult{}, err
 	}
 
-	raw, err := io.ReadAll(dec)
+	decodedBytes, err := io.Copy(io.Discard, dec)
 	if err != nil {
 		return decodeResult{}, err
 	}
-	sampleCount := len(raw) / 2
 	return decodeResult{
-		decodedBytes: len(raw),
-		samples:      sampleCount,
+		decodedBytes: int(decodedBytes),
+		samples:      int(decodedBytes) / 2,
 	}, nil
 }
 
-func decodeWithGoMP3(path string) (decodeResult, error) {
-	f, err := os.Open(path)
+func decodeWithGoMP3(encoded []byte) (decodeResult, error) {
+	dec, err := refmp3.NewDecoder(bytes.NewReader(encoded))
 	if err != nil {
 		return decodeResult{}, err
 	}
-	defer f.Close()
-
-	dec, err := refmp3.NewDecoder(f)
+	decodedBytes, err := io.Copy(io.Discard, dec)
 	if err != nil {
 		return decodeResult{}, err
 	}
-	raw, err := io.ReadAll(dec)
-	if err != nil {
-		return decodeResult{}, err
-	}
-	sampleCount := len(raw) / 2
 	return decodeResult{
-		decodedBytes: len(raw),
-		samples:      sampleCount,
+		decodedBytes: int(decodedBytes),
+		samples:      int(decodedBytes) / 2,
 	}, nil
 }
 

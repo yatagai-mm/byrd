@@ -2,7 +2,7 @@ package maindata
 
 import (
 	"fmt"
-	"github.com/kota-yata/byrd-mp3/internal/common"
+	"github.com/yatagai-mm/byrd/internal/common"
 )
 
 func Reorder(sampleRate uint16, gc *common.GranuleChannelInfo, in []float32, out *[]float32) error {

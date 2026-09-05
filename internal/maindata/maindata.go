@@ -2,11 +2,10 @@ package maindata
 
 import (
 	"fmt"
-	"github.com/kota-yata/byrd-mp3/internal/common"
 	"strings"
-)
 
-const RESERVOIR_MAX = 511 // 2^9 - 1 which is the size of main_data_begin field of side info
+	"github.com/yatagai-mm/byrd/internal/common"
+)
 
 const (
 	SCALEFACTOR_LONG_SFB_0_START = 0
@@ -31,8 +30,54 @@ const (
 	SCALEFACTOR_SHORT_WINDOW_COUNT = 3
 )
 
+const (
+	reservoirBufferSize = 512
+	reservoirBufferMask = reservoirBufferSize - 1
+	RESERVOIR_MAX       = reservoirBufferSize - 1 // 2^9 - 1, the maximum main_data_begin value
+)
+
+// Reservoir keeps the most recent main-data bytes needed by a later frame.
+// The backing array is a power-of-two ring, while the logical size is limited
+// to the MPEG-1 Layer III maximum backwards offset of 511 bytes.
+type Reservoir struct {
+	data     [reservoirBufferSize]byte
+	writePos uint16
+	size     uint16
+}
+
+func (r *Reservoir) Len() int {
+	return int(r.size)
+}
+
+func (r *Reservoir) copyLast(dst []byte, n int) {
+	start := (int(r.writePos) - n) & reservoirBufferMask
+	first := min(n, reservoirBufferSize-start)
+	copy(dst[:first], r.data[start:start+first])
+	copy(dst[first:n], r.data[:n-first])
+}
+
+func (r *Reservoir) append(src []byte) {
+	if len(src) == 0 {
+		return
+	}
+	if len(src) >= RESERVOIR_MAX {
+		src = src[len(src)-RESERVOIR_MAX:]
+		copy(r.data[:RESERVOIR_MAX], src)
+		r.writePos = RESERVOIR_MAX
+		r.size = RESERVOIR_MAX
+		return
+	}
+
+	writePos := int(r.writePos)
+	first := min(len(src), reservoirBufferSize-writePos)
+	copy(r.data[writePos:writePos+first], src[:first])
+	copy(r.data[:len(src)-first], src[first:])
+	r.writePos = uint16((writePos + len(src)) & reservoirBufferMask)
+	r.size = uint16(min(RESERVOIR_MAX, int(r.size)+len(src)))
+}
+
 // generate main data from reservoir offset
-func ReadMainData(mainDataBegin uint16, mainDataReservoir *[]byte, cur []byte, mainData *[]byte) error {
+func ReadMainData(mainDataBegin uint16, mainDataReservoir *Reservoir, cur []byte, mainData *[]byte) error {
 	if mainDataReservoir == nil {
 		return fmt.Errorf("nil main data reservoir")
 	}
@@ -40,24 +85,20 @@ func ReadMainData(mainDataBegin uint16, mainDataReservoir *[]byte, cur []byte, m
 		return fmt.Errorf("nil main data buffer")
 	}
 	// mainDataBegin is the reverse offset from the end of the reservoir, so it can't be larger than the reservoir itself
-	if int(mainDataBegin) > len(*mainDataReservoir) {
-		return fmt.Errorf("bit reservoir underflow: need %d bytes, have %d", mainDataBegin, len(*mainDataReservoir))
+	if int(mainDataBegin) > mainDataReservoir.Len() {
+		return fmt.Errorf("bit reservoir underflow: need %d bytes, have %d", mainDataBegin, mainDataReservoir.Len())
 	}
-	start := len(*mainDataReservoir) - int(mainDataBegin)
 	mainDataLen := int(mainDataBegin) + len(cur)
 
 	// we reuse mainData buffer for reducing GC overhead, but grow it if needed
 	if cap(*mainData) < mainDataLen {
-		*mainData = make([]byte, 0, mainDataLen)
+		*mainData = make([]byte, mainDataLen)
+	} else {
+		*mainData = (*mainData)[:mainDataLen]
 	}
-	*mainData = (*mainData)[:0]
-	*mainData = append(*mainData, (*mainDataReservoir)[start:]...) // append the last mainDataBegin bytes from reservoir
-	*mainData = append(*mainData, cur...)                          // append the current frame's main data
-	// update reservoir for next frame
-	*mainDataReservoir = append(*mainDataReservoir, cur...)
-	if len(*mainDataReservoir) > RESERVOIR_MAX { // only have to keep RESERVOIR_MAX bytes, so truncate the buffer
-		*mainDataReservoir = (*mainDataReservoir)[len(*mainDataReservoir)-RESERVOIR_MAX:]
-	}
+	mainDataReservoir.copyLast((*mainData)[:mainDataBegin], int(mainDataBegin))
+	copy((*mainData)[mainDataBegin:], cur)
+	mainDataReservoir.append(cur)
 
 	return nil
 }
@@ -232,7 +273,7 @@ func ParseCount1Values(br *common.BitReader, gc *common.GranuleChannelInfo, part
 		return 0, fmt.Errorf("unsupported count1 huffman table: %d", tableIndex)
 	}
 	table := common.BaseTables[tableIndex]
-	if table.Data == nil {
+	if len(table.LUT) == 0 {
 		return 0, fmt.Errorf("unsupported count1 huffman table: %d", tableIndex)
 	}
 

@@ -3,7 +3,7 @@ package header
 import (
 	"fmt"
 
-	"github.com/kota-yata/byrd-mp3/internal/common"
+	"github.com/yatagai-mm/byrd/internal/common"
 )
 
 type SideInfo = common.SideInfo

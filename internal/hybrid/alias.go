@@ -3,7 +3,7 @@ package hybrid
 import (
 	"fmt"
 
-	"github.com/kota-yata/byrd-mp3/internal/common"
+	"github.com/yatagai-mm/byrd/internal/common"
 )
 
 // cosine value for butterfly calculation

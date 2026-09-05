@@ -2,7 +2,7 @@ package maindata
 
 import (
 	"bytes"
-	"github.com/kota-yata/byrd-mp3/internal/common"
+	"github.com/yatagai-mm/byrd/internal/common"
 	"testing"
 )
 
@@ -19,10 +19,22 @@ var (
 	SCALEFACTOR_BAND_INDICES = common.SCALEFACTOR_BAND_INDICES
 )
 
+func testReservoir(data []byte) Reservoir {
+	var reservoir Reservoir
+	reservoir.append(data)
+	return reservoir
+}
+
+func reservoirBytes(reservoir *Reservoir) []byte {
+	data := make([]byte, reservoir.Len())
+	reservoir.copyLast(data, len(data))
+	return data
+}
+
 func TestReadMainData_NoReservoir(t *testing.T) {
 	// No reservoir, mainDataBegin=0, read N bytes
 	cur := []byte("abcdefghij")
-	var reservoir []byte
+	var reservoir Reservoir
 	var mainBuf []byte
 	err := ReadMainData(0, &reservoir, cur, &mainBuf)
 	if err != nil {
@@ -32,14 +44,14 @@ func TestReadMainData_NoReservoir(t *testing.T) {
 	if !bytes.Equal(mainBuf, cur) {
 		t.Fatalf("main data mismatch: got %q, want %q", string(mainBuf), string(cur))
 	}
-	if !bytes.Equal(reservoir, cur) {
-		t.Fatalf("reservoir mismatch: got %q, want %q", string(reservoir), string(cur))
+	if got := reservoirBytes(&reservoir); !bytes.Equal(got, cur) {
+		t.Fatalf("reservoir mismatch: got %q, want %q", string(got), string(cur))
 	}
 }
 
 func TestReadMainData_WithReservoirAndBegin(t *testing.T) {
 	// Reservoir has 3 bytes; mainDataBegin=2 should pull last 2 bytes
-	reservoir := []byte("XYZ")
+	reservoir := testReservoir([]byte("XYZ"))
 	cur := []byte("abcde")
 	var mainBuf []byte
 
@@ -53,13 +65,13 @@ func TestReadMainData_WithReservoirAndBegin(t *testing.T) {
 		t.Fatalf("main data mismatch: got %q, want %q", string(mainBuf), string(wantMain))
 	}
 	wantRes := []byte("XYZabcde")
-	if !bytes.Equal(reservoir, wantRes) {
-		t.Fatalf("reservoir mismatch: got %q, want %q", string(reservoir), string(wantRes))
+	if got := reservoirBytes(&reservoir); !bytes.Equal(got, wantRes) {
+		t.Fatalf("reservoir mismatch: got %q, want %q", string(got), string(wantRes))
 	}
 }
 
 func TestReadMainData_ReservoirUnderflow(t *testing.T) {
-	reservoir := []byte("XYZ")
+	reservoir := testReservoir([]byte("XYZ"))
 	cur := []byte("abc")
 	var mainBuf []byte
 
@@ -74,7 +86,7 @@ func TestReadMainData_ReservoirTruncation(t *testing.T) {
 	if RESERVOIR_MAX < 20 {
 		t.Skip("RESERVOIR_MAX too small for truncation test")
 	}
-	reservoir := bytes.Repeat([]byte{'R'}, RESERVOIR_MAX-5)
+	reservoir := testReservoir(bytes.Repeat([]byte{'R'}, RESERVOIR_MAX-5))
 	cur := bytes.Repeat([]byte{'C'}, 20)
 	var mainBuf []byte
 
@@ -87,19 +99,73 @@ func TestReadMainData_ReservoirTruncation(t *testing.T) {
 	if !bytes.Equal(mainBuf, cur) {
 		t.Fatalf("main data mismatch: got len=%d, want len=%d", len(mainBuf), len(cur))
 	}
-	if len(reservoir) != RESERVOIR_MAX {
-		t.Fatalf("reservoir length got %d, want %d", len(reservoir), RESERVOIR_MAX)
+	if reservoir.Len() != RESERVOIR_MAX {
+		t.Fatalf("reservoir length got %d, want %d", reservoir.Len(), RESERVOIR_MAX)
 	}
 	// Last RESERVOIR_MAX bytes should end with the newly appended 'C's
+	gotReservoir := reservoirBytes(&reservoir)
 	for i := 0; i < len(cur); i++ {
-		if reservoir[len(reservoir)-len(cur)+i] != 'C' {
+		if gotReservoir[len(gotReservoir)-len(cur)+i] != 'C' {
 			t.Fatalf("reservoir tail mismatch at %d", i)
 		}
 	}
 }
 
+func TestReadMainData_ReservoirWraparound(t *testing.T) {
+	initial := make([]byte, 500)
+	for i := range initial {
+		initial[i] = byte(i)
+	}
+	reservoir := testReservoir(initial)
+	firstCur := bytes.Repeat([]byte{0xcc}, 20)
+	var mainBuf []byte
+
+	if err := ReadMainData(30, &reservoir, firstCur, &mainBuf); err != nil {
+		t.Fatalf("first ReadMainData failed: %v", err)
+	}
+	wantFirst := append(append([]byte{}, initial[len(initial)-30:]...), firstCur...)
+	if !bytes.Equal(mainBuf, wantFirst) {
+		t.Fatalf("first main data mismatch")
+	}
+
+	secondCur := []byte("next")
+	if err := ReadMainData(40, &reservoir, secondCur, &mainBuf); err != nil {
+		t.Fatalf("second ReadMainData failed: %v", err)
+	}
+	history := append(append([]byte{}, initial...), firstCur...)
+	wantSecond := append(append([]byte{}, history[len(history)-40:]...), secondCur...)
+	if !bytes.Equal(mainBuf, wantSecond) {
+		t.Fatalf("wrapped main data mismatch")
+	}
+}
+
+func TestReservoirAppendKeepsLatestBytes(t *testing.T) {
+	var reservoir Reservoir
+	var want []byte
+	chunks := [][]byte{
+		{},
+		{1},
+		bytes.Repeat([]byte{2}, 500),
+		bytes.Repeat([]byte{3}, 20),
+		bytes.Repeat([]byte{4}, RESERVOIR_MAX),
+		bytes.Repeat([]byte{5}, RESERVOIR_MAX+100),
+		bytes.Repeat([]byte{6}, 17),
+	}
+
+	for i, chunk := range chunks {
+		reservoir.append(chunk)
+		want = append(want, chunk...)
+		if len(want) > RESERVOIR_MAX {
+			want = want[len(want)-RESERVOIR_MAX:]
+		}
+		if got := reservoirBytes(&reservoir); !bytes.Equal(got, want) {
+			t.Fatalf("append %d: reservoir mismatch", i)
+		}
+	}
+}
+
 func TestReadMainData_ReusesMainDataBuffer(t *testing.T) {
-	reservoir := []byte("XYZ")
+	reservoir := testReservoir([]byte("XYZ"))
 	cur := []byte("abcde")
 	mainBuf := make([]byte, 0, 16)
 

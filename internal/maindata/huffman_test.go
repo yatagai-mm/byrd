@@ -1,108 +1,122 @@
 package maindata
 
 import (
-	"github.com/kota-yata/byrd-mp3/internal/common"
+	"fmt"
 	"testing"
+
+	"github.com/yatagai-mm/byrd/internal/common"
 )
 
 func sameTable(got *common.HuffmanTable, want common.HuffmanTable) bool {
 	if got == nil {
 		return false
 	}
-	if got.Linbits != want.Linbits || got.TreeLen != want.TreeLen {
+	if got.Linbits != want.Linbits || got.LUTBits != want.LUTBits || got.IsZero != want.IsZero {
 		return false
 	}
-	if len(got.Data) == 0 || len(want.Data) == 0 {
-		return len(got.Data) == len(want.Data)
+	if len(got.LUT) == 0 || len(want.LUT) == 0 {
+		return len(got.LUT) == len(want.LUT)
 	}
-	return &got.Data[0] == &want.Data[0]
+	return len(got.LUT) == len(want.LUT) && &got.LUT[0] == &want.LUT[0]
 }
 
-func nextHuffmanIndex(table *common.HuffmanTable, idx int, bit uint32) int {
-	if bit != 0 {
-		for (table.Data[idx] & 0x00FF) >= 250 {
-			idx += int(table.Data[idx] & 0x00FF)
-		}
-		return idx + int(table.Data[idx]&0x00FF)
-	}
-	for (table.Data[idx] >> 8) >= 250 {
-		idx += int(table.Data[idx] >> 8)
-	}
-	return idx + int(table.Data[idx]>>8)
+type lutCode struct {
+	bits   uint32
+	length int
+	symbol uint16
 }
 
-func findPairCode(t *testing.T, table common.HuffmanTable, wantX int, wantY int) []uint32 {
+func collectLUTCodes(t testing.TB, table common.HuffmanTable) []lutCode {
 	t.Helper()
-
-	var search func(idx int, path []uint32) ([]uint32, bool)
-	search = func(idx int, path []uint32) ([]uint32, bool) {
-		if idx < 0 || idx >= len(table.Data) {
-			return nil, false
-		}
-		node := table.Data[idx]
-		if isHuffmanLeaf(node) {
-			x := int((node >> 4) & 0xF)
-			y := int(node & 0xF)
-			if x == wantX && y == wantY {
-				out := make([]uint32, len(path))
-				copy(out, path)
-				return out, true
-			}
-			return nil, false
-		}
-		for _, bit := range []uint32{0, 1} {
-			next := nextHuffmanIndex(&table, idx, bit)
-			if code, ok := search(next, append(path, bit)); ok {
-				return code, true
-			}
-		}
-		return nil, false
+	if len(table.LUT) == 0 || table.LUTBits == 0 {
+		t.Fatal("cannot collect codewords from an empty LUT table")
 	}
 
-	code, ok := search(0, nil)
-	if !ok {
-		t.Fatalf("pair (%d,%d) not found in table", wantX, wantY)
+	codes := make(map[lutCode]struct{})
+	var walk func(offset int, width int, prefix uint32, prefixLength int, level int)
+	walk = func(offset int, width int, prefix uint32, prefixLength int, level int) {
+		if level >= 8 {
+			t.Fatal("LUT table exceeds maximum lookup depth")
+		}
+		if width <= 0 || width > 7 {
+			t.Fatalf("invalid LUT lookup width %d", width)
+		}
+		size := 1 << width
+		if offset < 0 || offset+size > len(table.LUT) {
+			t.Fatalf("LUT range [%d:%d] exceeds table length %d", offset, offset+size, len(table.LUT))
+		}
+
+		for index := 0; index < size; index++ {
+			entry := table.LUT[offset+index]
+			if entry == 0 {
+				continue
+			}
+
+			leafBits := int(entry & 0xff)
+			if leafBits != 0 {
+				if leafBits > width {
+					t.Fatalf("leaf width %d exceeds lookup width %d", leafBits, width)
+				}
+				segment := uint32(index >> (width - leafBits))
+				code := lutCode{
+					bits:   prefix<<leafBits | segment,
+					length: prefixLength + leafBits,
+					symbol: uint16((entry >> 8) & 0xff),
+				}
+				codes[code] = struct{}{}
+				continue
+			}
+
+			nextOffset := int(entry >> 16)
+			nextWidth := int((entry >> 8) & 0xff)
+			walk(nextOffset, nextWidth, prefix<<width|uint32(index), prefixLength+width, level+1)
+		}
 	}
-	return code
+	walk(0, int(table.LUTBits), 0, 0, 0)
+
+	result := make([]lutCode, 0, len(codes))
+	for code := range codes {
+		result = append(result, code)
+	}
+	return result
 }
 
-func findQuadCode(t *testing.T, table common.HuffmanTable, want [4]int) []uint32 {
+func lutCodeBits(code lutCode) []uint32 {
+	bits := make([]uint32, code.length)
+	for i := range bits {
+		bits[i] = (code.bits >> (code.length - i - 1)) & 1
+	}
+	return bits
+}
+
+func findPairCode(t testing.TB, table common.HuffmanTable, wantX int, wantY int) []uint32 {
 	t.Helper()
-
-	var search func(idx int, path []uint32) ([]uint32, bool)
-	search = func(idx int, path []uint32) ([]uint32, bool) {
-		if idx < 0 || idx >= len(table.Data) {
-			return nil, false
+	for _, code := range collectLUTCodes(t, table) {
+		x := int((code.symbol >> 4) & 0xf)
+		y := int(code.symbol & 0xf)
+		if x == wantX && y == wantY {
+			return lutCodeBits(code)
 		}
-		node := table.Data[idx]
-		if isHuffmanLeaf(node) {
-			got := [4]int{
-				int((node >> 3) & 0x1),
-				int((node >> 2) & 0x1),
-				int((node >> 1) & 0x1),
-				int(node & 0x1),
-			}
-			if got == want {
-				out := make([]uint32, len(path))
-				copy(out, path)
-				return out, true
-			}
-			return nil, false
-		}
-		for _, bit := range []uint32{0, 1} {
-			next := nextHuffmanIndex(&table, idx, bit)
-			if code, ok := search(next, append(path, bit)); ok {
-				return code, true
-			}
-		}
-		return nil, false
 	}
+	t.Fatalf("pair (%d,%d) not found in table", wantX, wantY)
+	return nil
+}
 
-	code, ok := search(0, nil)
-	if !ok {
-		t.Fatalf("quad %v not found in table", want)
+func findQuadCode(t testing.TB, table common.HuffmanTable, want [4]int) []uint32 {
+	t.Helper()
+	for _, code := range collectLUTCodes(t, table) {
+		got := [4]int{
+			int((code.symbol >> 3) & 0x1),
+			int((code.symbol >> 2) & 0x1),
+			int((code.symbol >> 1) & 0x1),
+			int(code.symbol & 0x1),
+		}
+		if got == want {
+			return lutCodeBits(code)
+		}
 	}
-	return code
+	t.Fatalf("quad %v not found in table", want)
+	return nil
 }
 
 func TestSelectTable_LongBlock(t *testing.T) {
@@ -163,7 +177,7 @@ func TestSelectTable_SwitchedWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("selectTable region0 failed: %v", err)
 	}
-	if got0.Linbits != 1 || len(got0.Data) != len(common.BaseTables[16].Data) {
+	if got0.Linbits != 1 || len(got0.LUT) != len(common.BaseTables[16].LUT) {
 		t.Fatalf("region0 got %+v, want table 16", *got0)
 	}
 	if !sameTable(got0, common.BaseTables[16]) {
@@ -174,7 +188,7 @@ func TestSelectTable_SwitchedWindow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("selectTable region1 failed: %v", err)
 	}
-	if got1.Linbits != 4 || len(got1.Data) != len(common.BaseTables[24].Data) {
+	if got1.Linbits != 4 || len(got1.LUT) != len(common.BaseTables[24].LUT) {
 		t.Fatalf("region1 got %+v, want table 24", *got1)
 	}
 	if !sameTable(got1, common.BaseTables[24]) {
@@ -279,6 +293,22 @@ func TestDecodeHuffmanPair_Table1(t *testing.T) {
 	}
 }
 
+func TestDecodeHuffmanPair_Table0ConsumesNoBits(t *testing.T) {
+	table := common.BaseTables[0]
+	br := common.NewBitReader(nil)
+	var scratch uint32
+	x, y, err := decodeHuffmanPair(br, &table, 0, &scratch)
+	if err != nil {
+		t.Fatalf("decodeHuffmanPair failed: %v", err)
+	}
+	if x != 0 || y != 0 {
+		t.Fatalf("decoded pair got (%d,%d), want (0,0)", x, y)
+	}
+	if br.Pos != 0 {
+		t.Fatalf("zero table consumed %d bits, want 0", br.Pos)
+	}
+}
+
 func TestDecodeHuffmanPair_Linbits(t *testing.T) {
 	table := common.BaseTables[16]
 	code := findPairCode(t, table, 15, 15)
@@ -344,6 +374,99 @@ func TestDecodeHuffmanQuad_Invalid(t *testing.T) {
 	empty := common.HuffmanTable{}
 	if _, _, _, _, err := decodeHuffmanQuad(br, &empty, 1, &scratch); err == nil {
 		t.Fatalf("expected empty table error")
+	}
+}
+
+func TestHuffmanLUTAllCodewords(t *testing.T) {
+	expectedCodewords := map[int]int{
+		1: 4,
+		2: 9, 3: 9,
+		5: 16, 6: 16,
+		7: 36, 8: 36, 9: 36,
+		10: 64, 11: 64, 12: 64,
+		13: 256, 15: 256,
+		16: 256, 17: 256, 18: 256, 19: 256,
+		20: 256, 21: 256, 22: 256, 23: 256,
+		24: 256, 25: 256, 26: 256, 27: 256,
+		28: 256, 29: 256, 30: 256, 31: 256,
+		32: 16, 33: 16,
+	}
+
+	for tableIndex := 1; tableIndex < len(common.BaseTables); tableIndex++ {
+		table := &common.BaseTables[tableIndex]
+		if len(table.LUT) == 0 {
+			continue
+		}
+
+		t.Run(fmt.Sprintf("table-%d", tableIndex), func(t *testing.T) {
+			codes := collectLUTCodes(t, *table)
+			if got, want := len(codes), expectedCodewords[tableIndex]; got != want {
+				t.Fatalf("collected %d codewords, want %d", got, want)
+			}
+
+			for _, code := range codes {
+				var bw bitWriter
+				bw.write(code.length, code.bits)
+				reader := common.NewBitReader(bw.bytes())
+				var scratch uint32
+				got, err := decodeHuffmanSymbolLUT(reader, table, code.length, &scratch)
+				if err != nil {
+					t.Fatalf("code %0*b: %v", code.length, code.bits, err)
+				}
+				if got != code.symbol {
+					t.Fatalf("code %0*b decoded %#x, want %#x", code.length, code.bits, got, code.symbol)
+				}
+				if reader.Pos != code.length {
+					t.Fatalf("code %0*b consumed %d bits, want %d", code.length, code.bits, reader.Pos, code.length)
+				}
+			}
+		})
+	}
+}
+
+var benchmarkHuffmanSink int
+
+func BenchmarkDecodeHuffmanPair(b *testing.B) {
+	table := &common.BaseTables[13]
+	pairs := [][2]int{
+		{0, 0}, {1, 0}, {0, 1}, {1, 1},
+		{3, 7}, {7, 3}, {10, 12}, {14, 14}, {15, 15},
+	}
+
+	var bw bitWriter
+	bitLen := 0
+	for range 128 {
+		for _, pair := range pairs {
+			code := findPairCode(b, *table, pair[0], pair[1])
+			for _, bit := range code {
+				bw.write(1, bit)
+			}
+			bitLen += len(code)
+			if pair[0] != 0 {
+				bw.write(1, 0)
+				bitLen++
+			}
+			if pair[1] != 0 {
+				bw.write(1, 0)
+				bitLen++
+			}
+		}
+	}
+	data := bw.bytes()
+
+	reader := common.NewBitReader(data)
+	var scratch uint32
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if reader.Pos >= bitLen {
+			reader.Pos = 0
+		}
+		x, y, err := decodeHuffmanPair(reader, table, bitLen, &scratch)
+		if err != nil {
+			b.Fatal(err)
+		}
+		benchmarkHuffmanSink ^= x + y
 	}
 }
 

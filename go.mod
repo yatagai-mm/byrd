@@ -1,3 +1,3 @@
-module github.com/kota-yata/byrd-mp3
+module github.com/yatagai-mm/byrd
 
 go 1.26

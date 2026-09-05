@@ -3,8 +3,8 @@ module byrd-bench
 go 1.26
 
 require (
-	github.com/kota-yata/byrd-mp3 v0.0.1
 	github.com/hajimehoshi/go-mp3 v0.3.4
+	github.com/yatagai-mm/byrd v0.2.1
 )
 
-replace github.com/kota-yata/byrd-mp3 => ..
+replace github.com/yatagai-mm/byrd => ..
