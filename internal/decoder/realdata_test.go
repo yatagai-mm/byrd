@@ -66,7 +66,7 @@ func runParseRealDataTest(t *testing.T, path string) {
 	}
 
 	r := bufio.NewReader(f)
-	var mainDataReservoir []byte
+	var mainDataReservoir maindata.Reservoir
 	var sideInfoBuf []byte
 	var cur []byte
 	var mainData []byte
@@ -162,7 +162,7 @@ func runParseRealDataTest(t *testing.T, path string) {
 				sideInfoLen,
 				sideInfo.MainDataBegin,
 				mainDataLen,
-				len(mainDataReservoir),
+				mainDataReservoir.Len(),
 			),
 		}
 		for ch := 0; ch < channels; ch++ {

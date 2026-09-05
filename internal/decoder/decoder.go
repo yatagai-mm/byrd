@@ -30,7 +30,7 @@ func OpenMP3File(path string) (io.ReadCloser, error) {
 type Reader struct {
 	r *bufio.Reader
 
-	mainDataReservoir []byte
+	mainDataReservoir maindata.Reservoir
 	sideInfoBuf       []byte
 	cur               []byte
 	mainData          []byte
