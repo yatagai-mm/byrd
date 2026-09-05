@@ -53,17 +53,17 @@ See examples under example/ for further usage.
 goos: darwin
 goarch: arm64
 pkg: byrd-bench
-cpu: Apple M2
-BenchmarkDecode/byrd/440hz-8                   2         761768375 ns/op           1.05 MB/s    73397840 B/op      13511 allocs/op
-BenchmarkDecode/go-mp3/440hz-8                 1        1122291417 ns/op           0.71 MB/s    401718416 B/op    832092 allocs/op
-BenchmarkDecode/byrd/alarm-8                   4         301212552 ns/op           2.44 MB/s    17954744 B/op       4525 allocs/op
-BenchmarkDecode/go-mp3/alarm-8                 3         372493167 ns/op           1.97 MB/s    107437600 B/op    225284 allocs/op
-BenchmarkDecode/byrd/song-8                    1        1211818375 ns/op           3.42 MB/s    59609496 B/op      14920 allocs/op
-BenchmarkDecode/go-mp3/song-8                  1        1326870209 ns/op           3.12 MB/s    337331008 B/op    693346 allocs/op
-BenchmarkDecode/byrd/synth-8                   8         136756088 ns/op           2.25 MB/s     7939654 B/op       1904 allocs/op
-BenchmarkDecode/go-mp3/synth-8                 7         166037327 ns/op           1.85 MB/s    48806340 B/op     102876 allocs/op
-BenchmarkDecode/byrd/circle-reading-8                  1        41701810375 ns/op          2.04 MB/s    2376429496 B/op   618374 allocs/op
-BenchmarkDecode/go-mp3/circle-reading-8                1        50237129917 ns/op          1.69 MB/s    14913808680 B/op        31594036 allocs/op
+cpu: Apple M5 Pro
+BenchmarkDecode/byrd/440hz-18         	       3	 417061153 ns/op	   1.92 MB/s	 2171269 B/op	   13478 allocs/op
+BenchmarkDecode/go-mp3/440hz-18       	       2	 637946770 ns/op	   1.25 MB/s	330494200 B/op	  832075 allocs/op
+BenchmarkDecode/byrd/alarm-18         	       7	 155915506 ns/op	   4.71 MB/s	 1851371 B/op	    4495 allocs/op
+BenchmarkDecode/go-mp3/alarm-18       	       5	 208990642 ns/op	   3.51 MB/s	91337355 B/op	  225258 allocs/op
+BenchmarkDecode/byrd/song-18          	       2	 608771146 ns/op	   6.81 MB/s	 7642208 B/op	   14887 allocs/op
+BenchmarkDecode/go-mp3/song-18        	       2	 742717458 ns/op	   5.58 MB/s	285375552 B/op	  693321 allocs/op
+BenchmarkDecode/byrd/synth-18         	      16	  70732844 ns/op	   4.35 MB/s	  665817 B/op	    1875 allocs/op
+BenchmarkDecode/go-mp3/synth-18       	      12	  93210142 ns/op	   3.30 MB/s	41535624 B/op	  102850 allocs/op
+BenchmarkDecode/byrd/circle-reading-18         	       1	21746207083 ns/op	   3.91 MB/s	216393248 B/op	  618327 allocs/op
+BenchmarkDecode/go-mp3/circle-reading-18       	       1	29533760500 ns/op	   2.88 MB/s	12753789016 B/op	31593997 allocs/op
 ```
 
 ```
