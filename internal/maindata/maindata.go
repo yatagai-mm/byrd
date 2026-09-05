@@ -232,7 +232,7 @@ func ParseCount1Values(br *common.BitReader, gc *common.GranuleChannelInfo, part
 		return 0, fmt.Errorf("unsupported count1 huffman table: %d", tableIndex)
 	}
 	table := common.BaseTables[tableIndex]
-	if table.Data == nil {
+	if len(table.LUT) == 0 {
 		return 0, fmt.Errorf("unsupported count1 huffman table: %d", tableIndex)
 	}
 

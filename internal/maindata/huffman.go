@@ -2,12 +2,9 @@ package maindata
 
 import (
 	"fmt"
+
 	"github.com/kota-yata/byrd-mp3/internal/common"
 )
-
-var huffmanZeroTable = common.HuffmanTable{
-	Data: []uint16{0x0000},
-}
 
 func selectTable(sampleRate uint16, gc *common.GranuleChannelInfo, spectralLineIndex int) (*common.HuffmanTable, error) {
 	if gc == nil {
@@ -57,14 +54,14 @@ func selectTable(sampleRate uint16, gc *common.GranuleChannelInfo, spectralLineI
 	}
 
 	if tableIndex == 0 {
-		return &huffmanZeroTable, nil
+		return &common.BaseTables[0], nil
 	}
 
 	if tableIndex < 0 || tableIndex >= len(common.BaseTables) {
 		return nil, fmt.Errorf("unknown huffman table: %d", tableIndex)
 	}
 	table := &common.BaseTables[tableIndex]
-	if table.Data == nil {
+	if len(table.LUT) == 0 {
 		return nil, fmt.Errorf("unsupported huffman table: %d", tableIndex)
 	}
 	return table, nil
@@ -84,167 +81,161 @@ func guardedReadBits(br *common.BitReader, limit int, n int, scratch *uint32) er
 	return br.ReadBitsTo(scratch, n)
 }
 
-func isHuffmanLeaf(v uint16) bool {
-	return v&0xFF00 == 0
+func huffmanDataLimitError(limit int, pos int) error {
+	return fmt.Errorf("huffman data exceeds part23 length: incomplete code, have %d bits", max(0, limit-pos))
+}
+
+func decodeHuffmanSymbolLUT(br *common.BitReader, table *common.HuffmanTable, limit int, scratch *uint32) (uint16, error) {
+	if table == nil {
+		return 0, fmt.Errorf("nil huffman table")
+	}
+	if table.IsZero {
+		return 0, nil
+	}
+	if len(table.LUT) == 0 {
+		return 0, fmt.Errorf("empty huffman table")
+	}
+	if table.LUTBits == 0 {
+		return 0, fmt.Errorf("missing huffman LUT table")
+	}
+
+	// Each level consumes at most seven bits. MP3's longest 19-bit codeword
+	// therefore needs no more than three dependent table lookups.
+	offset := 0
+	width := int(table.LUTBits)
+	for level := 0; level < 8; level++ {
+		available := limit - br.Pos
+		if available <= 0 {
+			return 0, huffmanDataLimitError(limit, br.Pos)
+		}
+		readWidth := min(width, available)
+		if err := br.ReadBitsTo(scratch, readWidth); err != nil {
+			return 0, err
+		}
+		prefix := int(*scratch)
+		if readWidth < width {
+			prefix <<= width - readWidth
+		}
+
+		entryIndex := offset + prefix
+		if entryIndex < 0 || entryIndex >= len(table.LUT) {
+			return 0, fmt.Errorf("invalid huffman LUT index")
+		}
+		entry := table.LUT[entryIndex]
+		if entry == 0 {
+			if readWidth < width {
+				return 0, huffmanDataLimitError(limit, br.Pos)
+			}
+			return 0, fmt.Errorf("invalid huffman LUT prefix")
+		}
+
+		bits := int(entry & 0xff)
+		if bits != 0 {
+			if bits > readWidth {
+				return 0, huffmanDataLimitError(limit, br.Pos)
+			}
+			br.Pos -= readWidth - bits
+			return uint16((entry >> 8) & 0xff), nil
+		}
+
+		if readWidth < width {
+			return 0, huffmanDataLimitError(limit, br.Pos)
+		}
+		offset = int(entry >> 16)
+		width = int((entry >> 8) & 0xff)
+		if width == 0 {
+			return 0, fmt.Errorf("invalid huffman LUT subtable")
+		}
+	}
+
+	return 0, fmt.Errorf("huffman LUT depth exceeds limit")
 }
 
 func decodeHuffmanPair(br *common.BitReader, table *common.HuffmanTable, limit int, scratch *uint32) (int, int, error) {
-	if table == nil {
-		return 0, 0, fmt.Errorf("nil huffman table")
+	node, err := decodeHuffmanSymbolLUT(br, table, limit, scratch)
+	if err != nil {
+		return 0, 0, err
 	}
-	if len(table.Data) == 0 {
-		return 0, 0, fmt.Errorf("empty huffman table")
-	}
-	treeLen := table.TreeLen
-	if treeLen == 0 {
-		treeLen = len(table.Data)
-	}
+	return decodeHuffmanPairLeaf(br, table, node, limit, scratch)
+}
 
-	idx := 0
-	for {
-		if idx < 0 || idx >= len(table.Data) {
-			return 0, 0, fmt.Errorf("invalid huffman tree traversal")
+func decodeHuffmanPairLeaf(br *common.BitReader, table *common.HuffmanTable, node uint16, limit int, scratch *uint32) (int, int, error) {
+	x := int((node >> 4) & 0xF)
+	y := int(node & 0xF)
+	if table.Linbits > 0 {
+		if x == 15 {
+			if err := guardedReadBits(br, limit, table.Linbits, scratch); err != nil {
+				return 0, 0, err
+			}
+			x += int(*scratch)
 		}
-		node := table.Data[idx]
-		if isHuffmanLeaf(node) {
-			x := int((node >> 4) & 0xF)
-			y := int(node & 0xF)
-			if table.Linbits > 0 {
-				if x == 15 {
-					if err := guardedReadBits(br, limit, table.Linbits, scratch); err != nil {
-						return 0, 0, err
-					}
-					x += int(*scratch)
-				}
-				if x != 0 {
-					if err := guardedReadBit(br, limit, scratch); err != nil {
-						return 0, 0, err
-					}
-					if *scratch == 1 {
-						x = -x
-					}
-				}
-				if y == 15 {
-					if err := guardedReadBits(br, limit, table.Linbits, scratch); err != nil {
-						return 0, 0, err
-					}
-					y += int(*scratch)
-				}
-				if y != 0 {
-					if err := guardedReadBit(br, limit, scratch); err != nil {
-						return 0, 0, err
-					}
-					if *scratch == 1 {
-						y = -y
-					}
-				}
-				return x, y, nil
+		if x != 0 {
+			if err := guardedReadBit(br, limit, scratch); err != nil {
+				return 0, 0, err
 			}
-			if x != 0 {
-				if err := guardedReadBit(br, limit, scratch); err != nil {
-					return 0, 0, err
-				}
-				if *scratch == 1 {
-					x = -x
-				}
+			if *scratch == 1 {
+				x = -x
 			}
-			if y != 0 {
-				if err := guardedReadBit(br, limit, scratch); err != nil {
-					return 0, 0, err
-				}
-				if *scratch == 1 {
-					y = -y
-				}
-			}
-			return x, y, nil
 		}
-
+		if y == 15 {
+			if err := guardedReadBits(br, limit, table.Linbits, scratch); err != nil {
+				return 0, 0, err
+			}
+			y += int(*scratch)
+		}
+		if y != 0 {
+			if err := guardedReadBit(br, limit, scratch); err != nil {
+				return 0, 0, err
+			}
+			if *scratch == 1 {
+				y = -y
+			}
+		}
+		return x, y, nil
+	}
+	if x != 0 {
 		if err := guardedReadBit(br, limit, scratch); err != nil {
 			return 0, 0, err
 		}
-		if *scratch != 0 {
-			for (table.Data[idx] & 0x00FF) >= 250 {
-				idx += int(table.Data[idx] & 0x00FF)
-				if idx < 0 || idx >= len(table.Data) {
-					return 0, 0, fmt.Errorf("invalid huffman tree traversal")
-				}
-			}
-			idx += int(table.Data[idx] & 0x00FF)
-		} else {
-			for (table.Data[idx] >> 8) >= 250 {
-				idx += int(table.Data[idx] >> 8)
-				if idx < 0 || idx >= len(table.Data) {
-					return 0, 0, fmt.Errorf("invalid huffman tree traversal")
-				}
-			}
-			idx += int(table.Data[idx] >> 8)
-		}
-		if idx >= treeLen {
-			return 0, 0, fmt.Errorf("invalid huffman tree traversal")
+		if *scratch == 1 {
+			x = -x
 		}
 	}
+	if y != 0 {
+		if err := guardedReadBit(br, limit, scratch); err != nil {
+			return 0, 0, err
+		}
+		if *scratch == 1 {
+			y = -y
+		}
+	}
+	return x, y, nil
 }
 
 func decodeHuffmanQuad(br *common.BitReader, table *common.HuffmanTable, limit int, scratch *uint32) (int, int, int, int, error) {
-	if table == nil {
-		return 0, 0, 0, 0, fmt.Errorf("nil huffman table")
+	node, err := decodeHuffmanSymbolLUT(br, table, limit, scratch)
+	if err != nil {
+		return 0, 0, 0, 0, err
 	}
-	if len(table.Data) == 0 {
-		return 0, 0, 0, 0, fmt.Errorf("empty huffman table")
-	}
-	treeLen := table.TreeLen
-	if treeLen == 0 {
-		treeLen = len(table.Data)
-	}
+	return decodeHuffmanQuadLeaf(br, node, limit, scratch)
+}
 
-	idx := 0
-	for {
-		if idx < 0 || idx >= len(table.Data) {
-			return 0, 0, 0, 0, fmt.Errorf("invalid huffman tree traversal")
+func decodeHuffmanQuadLeaf(br *common.BitReader, node uint16, limit int, scratch *uint32) (int, int, int, int, error) {
+	v := int((node >> 3) & 0x1)
+	w := int((node >> 2) & 0x1)
+	x := int((node >> 1) & 0x1)
+	y := int(node & 0x1)
+	values := []*int{&v, &w, &x, &y}
+	for _, value := range values {
+		if *value == 0 {
+			continue
 		}
-		node := table.Data[idx]
-		if isHuffmanLeaf(node) {
-			v := int((node >> 3) & 0x1)
-			w := int((node >> 2) & 0x1)
-			x := int((node >> 1) & 0x1)
-			y := int(node & 0x1)
-			values := []*int{&v, &w, &x, &y}
-			for _, value := range values {
-				if *value == 0 {
-					continue
-				}
-				if err := guardedReadBit(br, limit, scratch); err != nil {
-					return 0, 0, 0, 0, err
-				}
-				if *scratch == 1 {
-					*value = -*value
-				}
-			}
-			return v, w, x, y, nil
-		}
-
 		if err := guardedReadBit(br, limit, scratch); err != nil {
 			return 0, 0, 0, 0, err
 		}
-		if *scratch != 0 {
-			for (table.Data[idx] & 0x00FF) >= 250 {
-				idx += int(table.Data[idx] & 0x00FF)
-				if idx < 0 || idx >= len(table.Data) {
-					return 0, 0, 0, 0, fmt.Errorf("invalid huffman tree traversal")
-				}
-			}
-			idx += int(table.Data[idx] & 0x00FF)
-		} else {
-			for (table.Data[idx] >> 8) >= 250 {
-				idx += int(table.Data[idx] >> 8)
-				if idx < 0 || idx >= len(table.Data) {
-					return 0, 0, 0, 0, fmt.Errorf("invalid huffman tree traversal")
-				}
-			}
-			idx += int(table.Data[idx] >> 8)
-		}
-		if idx >= treeLen {
-			return 0, 0, 0, 0, fmt.Errorf("invalid huffman tree traversal")
+		if *scratch == 1 {
+			*value = -*value
 		}
 	}
+	return v, w, x, y, nil
 }
