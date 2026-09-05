@@ -2,7 +2,7 @@
 ## Byrd
 MP3 (MPEG-1 Layer 3) decoder in Go. No dependency to third-party libraries.
 
-Byrd reduces alloc count per operation by reusing memory addresses from previous frame as much as possible.
+Byrd allocates very less amount of memory per operation by reusing memory space as much as possible among all frames. See the benchmark result below for further details.
 
 ### Usage
 ```bash
