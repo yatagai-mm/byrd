@@ -6,6 +6,35 @@ import (
 	"testing"
 )
 
+func TestSignedPow43_ExactOriginal(t *testing.T) {
+	// 15 plus the largest 13-bit escape value is the MP3 Huffman maximum.
+	for is := -8207; is <= 8207; is++ {
+		mag := float32(math.Pow(math.Abs(float64(is)), 4.0/3.0))
+		want := float32(math.Copysign(float64(mag), float64(is)))
+		if got := signedPow43(is); math.Float32bits(got) != math.Float32bits(want) {
+			t.Fatalf("is=%d got=%g want=%g", is, got, want)
+		}
+	}
+	for _, is := range []int{math.MinInt, math.MaxInt} {
+		mag := float32(math.Pow(math.Abs(float64(is)), 4.0/3.0))
+		want := float32(math.Copysign(float64(mag), float64(is)))
+		if got := signedPow43(is); got != want {
+			t.Fatalf("is=%d got=%g want=%g", is, got, want)
+		}
+	}
+}
+
+func TestRequantizeScale_ExactOriginal(t *testing.T) {
+	// Include the fallback range for every value representable by the
+	// uint8 scalefactor/subblock fields, not only valid MPEG-1 bit fields.
+	for q := -46; q <= 3271; q++ {
+		want := float32(math.Pow(2, -float64(q)/4))
+		if got := requantizeScale(q); math.Float32bits(got) != math.Float32bits(want) {
+			t.Fatalf("q=%d got=%g want=%g", q, got, want)
+		}
+	}
+}
+
 func TestRequantize_LongBlock_ZeroInput(t *testing.T) {
 	gc := &common.GranuleChannelInfo{GlobalGain: 210}
 	out := make([]float32, 576)
