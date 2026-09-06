@@ -1,6 +1,54 @@
 package synthesis
 
-import "testing"
+import (
+	"math/rand/v2"
+	"testing"
+
+	"github.com/yatagai-mm/byrd/internal/common"
+)
+
+// Exercise enough slots to wrap the full synthesis history several times.
+func TestSynthesizeSubbandSamples_ExactOriginal(t *testing.T) {
+	rng := rand.New(rand.NewPCG(3, 4))
+	var state PolyphaseState
+	var history [1024]float32
+	for slot := 0; slot < 96; slot++ {
+		var in, got [32]float32
+		for k := range in {
+			if slot < 64 {
+				in[k] = (rng.Float32()*2 - 1) * 100
+			}
+		}
+		if err := SynthesizeSubbandSamples(in[:], &state, got[:]); err != nil {
+			t.Fatal(err)
+		}
+		copy(history[64:], history[:960])
+		for i := range 64 {
+			sum := synthesisMatrix[i][0] * in[0]
+			for k := 1; k < 32; k++ {
+				sum += synthesisMatrix[i][k] * in[k]
+			}
+			history[i] = sum
+		}
+		var u [512]float32
+		for i := range 8 {
+			copy(u[i*64:i*64+32], history[i*128:i*128+32])
+			copy(u[i*64+32:i*64+64], history[i*128+96:i*128+128])
+		}
+		for j := range u {
+			u[j] *= common.SynthDtbl[j]
+		}
+		for j := range got {
+			want := u[j]
+			for i := 1; i < 16; i++ {
+				want += u[j+32*i]
+			}
+			if got[j] != want {
+				t.Fatalf("slot=%d sample=%d got=%g want=%g", slot, j, got[j], want)
+			}
+		}
+	}
+}
 
 func TestSynthesizeSubbandSamples_ZeroInput(t *testing.T) {
 	var state PolyphaseState
