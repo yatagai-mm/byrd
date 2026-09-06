@@ -99,13 +99,26 @@ func imdctLong(in []float32, blockType common.BlockType, out *[36]float32) {
 		window = &longWindow
 	}
 
-	for n := range 36 {
-		var sum float32
-		for k := range 18 {
-			sum += in[k] * imdctLongTable[n][k]
-		}
+	// The first half is antisymmetric around 8.5; the second half is
+	// symmetric around 26.5. Compute the 18 independent rows, retaining
+	// the original coefficients and left-to-right float32 accumulation.
+	inVec := (*[18]float32)(in)
+	for n := range 9 {
+		sum := dotProduct18(inVec, &imdctLongTable[n])
 		out[n] = sum * window[n]
+		out[17-n] = -sum * window[17-n]
+		sum = dotProduct18(inVec, &imdctLongTable[n+18])
+		out[n+18] = sum * window[n+18]
+		out[35-n] = sum * window[35-n]
 	}
+}
+
+func dotProduct18(a, b *[18]float32) float32 {
+	return a[0]*b[0] + a[1]*b[1] + a[2]*b[2] + a[3]*b[3] +
+		a[4]*b[4] + a[5]*b[5] + a[6]*b[6] + a[7]*b[7] +
+		a[8]*b[8] + a[9]*b[9] + a[10]*b[10] + a[11]*b[11] +
+		a[12]*b[12] + a[13]*b[13] + a[14]*b[14] + a[15]*b[15] +
+		a[16]*b[16] + a[17]*b[17]
 }
 
 func imdctShort(in []float32, out *[36]float32) {

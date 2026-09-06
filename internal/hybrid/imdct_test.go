@@ -3,8 +3,44 @@ package hybrid
 import (
 	"github.com/yatagai-mm/byrd/internal/common"
 	"math"
+	"math/rand/v2"
 	"testing"
 )
+
+// Keep the original float32 transform as an oracle: symmetry and loop
+// optimizations must preserve the arithmetic used by the decoder.
+func TestIMDCTLong_ExactOriginal(t *testing.T) {
+	rng := rand.New(rand.NewPCG(1, 2))
+	for trial := 0; trial < 128; trial++ {
+		var in [18]float32
+		for k := range in {
+			if trial >= 18 || trial == k {
+				in[k] = (rng.Float32()*2 - 1) * 100
+			}
+		}
+		for _, bt := range []common.BlockType{common.BlockTypeLong, common.BlockTypeStart, common.BlockTypeEnd} {
+			window := &longWindow
+			if bt == common.BlockTypeStart {
+				window = &startWindow
+			}
+			if bt == common.BlockTypeEnd {
+				window = &endWindow
+			}
+			var got [36]float32
+			imdctLong(in[:], bt, &got)
+			for n := range got {
+				var sum float32
+				for k := range in {
+					sum += in[k] * imdctLongTable[n][k]
+				}
+				want := sum * window[n]
+				if got[n] != want {
+					t.Fatalf("trial=%d block=%v sample=%d got=%g want=%g", trial, bt, n, got[n], want)
+				}
+			}
+		}
+	}
+}
 
 func referenceIMDCTLong(in []float32, blockType common.BlockType) [36]float32 {
 	var out [36]float32
