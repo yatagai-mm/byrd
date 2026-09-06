@@ -9,7 +9,36 @@ import (
 const (
 	mixedLongEndLine   = 36
 	mixedShortStartSFB = 3
+	minRequantizeQ     = -45 // global_gain = 255, no attenuation
+	maxRequantizeQ     = 326 // global_gain = 0, subblock_gain = 7, scalefactor = 15
 )
+
+// MPEG-1 Huffman magnitudes are at most 15 + (1<<13) - 1. Build the
+// lookup with the original formula so the float32 results stay identical.
+var pow43Table = func() [8207]float32 {
+	var table [8207]float32
+	for i := range table {
+		table[i] = float32(math.Pow(float64(i), 4.0/3.0))
+	}
+	return table
+}()
+
+var requantizeScaleTable = func() [maxRequantizeQ - minRequantizeQ + 1]float32 {
+	var table [maxRequantizeQ - minRequantizeQ + 1]float32
+	for i := range table {
+		table[i] = float32(math.Pow(2, -float64(i+minRequantizeQ)/4))
+	}
+	return table
+}()
+
+func requantizeScale(q int) float32 {
+	if q >= minRequantizeQ && q <= maxRequantizeQ {
+		return requantizeScaleTable[q-minRequantizeQ]
+	}
+	// Keep the previous behavior for callers supplying values beyond the
+	// bitstream field ranges, rather than indexing outside the table.
+	return float32(math.Pow(2, -float64(q)/4))
+}
 
 func Requantize(sampleRate uint16, gc *common.GranuleChannelInfo, scalefactors *Scalefactors, spectralValues []int, out *[]float32) error {
 	if gc == nil {
@@ -71,7 +100,7 @@ func requantizeLongLine(is int, gc *common.GranuleChannelInfo, scalefactors *Sca
 	// xr[i] = sign(is[i]) * |is[i]|^(4/3) *
 	//   2^(-(210 - global_gain + 2*(1+scalefac_scale)*(scalefac_l[sfb] + preflag*pretab[sfb])) / 4)
 	q := 210 - int(gc.GlobalGain) + 2*scalefacMultiplier*(int(scalefactors.Long[sfb])+pretab)
-	return signedPow43(is) * float32(math.Pow(2.0, -float64(q)/4.0))
+	return signedPow43(is) * requantizeScale(q)
 }
 
 func requantizeShortLine(is int, gc *common.GranuleChannelInfo, scalefactors *Scalefactors, sfb int, win int) float32 {
@@ -83,10 +112,16 @@ func requantizeShortLine(is int, gc *common.GranuleChannelInfo, scalefactors *Sc
 	// xr[i] = sign(is[i]) * |is[i]|^(4/3) *
 	//   2^(-(210 - global_gain + 8*subblock_gain[w] + 2*(1+scalefac_scale)*scalefac_s[sfb][w]) / 4)
 	q := 210 - int(gc.GlobalGain) + 8*int(gc.SubblockGain[win]) + 2*scalefacMultiplier*int(scalefactors.Short[sfb][win])
-	return signedPow43(is) * float32(math.Pow(2.0, -float64(q)/4.0))
+	return signedPow43(is) * requantizeScale(q)
 }
 
 func signedPow43(is int) float32 {
+	if is >= 0 && is < len(pow43Table) {
+		return pow43Table[is]
+	}
+	if is < 0 && is > -len(pow43Table) {
+		return -pow43Table[-is]
+	}
 	mag := float32(math.Pow(math.Abs(float64(is)), 4.0/3.0))
 	return float32(math.Copysign(float64(mag), float64(is)))
 }
