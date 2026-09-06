@@ -34,11 +34,28 @@ func dotProduct32(a *[32]float32, b *[32]float32) float32 {
 		a[28]*b[28] + a[29]*b[29] + a[30]*b[30] + a[31]*b[31]
 }
 
-func sumWindowColumn16(u *[512]float32, column int) float32 {
-	return u[column] + u[column+32] + u[column+64] + u[column+96] +
-		u[column+128] + u[column+160] + u[column+192] + u[column+224] +
-		u[column+256] + u[column+288] + u[column+320] + u[column+352] +
-		u[column+384] + u[column+416] + u[column+448] + u[column+480]
+// Sum directly from the history instead of materializing and windowing U.
+// Explicit float32 products retain the old U buffer's rounding before addition.
+func sumWindowColumn16(v *[1024]float32, column int) float32 {
+	if uint(column) >= 32 {
+		panic("invalid synthesis window column")
+	}
+	return float32(v[column]*common.SynthDtbl[column]) +
+		float32(v[column+96]*common.SynthDtbl[column+32]) +
+		float32(v[column+128]*common.SynthDtbl[column+64]) +
+		float32(v[column+224]*common.SynthDtbl[column+96]) +
+		float32(v[column+256]*common.SynthDtbl[column+128]) +
+		float32(v[column+352]*common.SynthDtbl[column+160]) +
+		float32(v[column+384]*common.SynthDtbl[column+192]) +
+		float32(v[column+480]*common.SynthDtbl[column+224]) +
+		float32(v[column+512]*common.SynthDtbl[column+256]) +
+		float32(v[column+608]*common.SynthDtbl[column+288]) +
+		float32(v[column+640]*common.SynthDtbl[column+320]) +
+		float32(v[column+736]*common.SynthDtbl[column+352]) +
+		float32(v[column+768]*common.SynthDtbl[column+384]) +
+		float32(v[column+864]*common.SynthDtbl[column+416]) +
+		float32(v[column+896]*common.SynthDtbl[column+448]) +
+		float32(v[column+992]*common.SynthDtbl[column+480])
 }
 
 func SynthesizeSubbandSamples(in []float32, state *PolyphaseState, out []float32) error {
@@ -69,19 +86,8 @@ func SynthesizeSubbandSamples(in []float32, state *PolyphaseState, out []float32
 	copy(state.v[64:], state.v[:960])
 	copy(state.v[:64], x[:])
 
-	var u [512]float32
-	for i := 0; i < 8; i++ {
-		copy(u[i*64:i*64+32], state.v[i*128:i*128+32])
-		copy(u[i*64+32:i*64+64], state.v[i*128+96:i*128+128])
-	}
-
-	for j := range u {
-		u[j] *= common.SynthDtbl[j]
-	}
-
-	uVec := &u
 	for j := range 32 {
-		out[j] = sumWindowColumn16(uVec, j)
+		out[j] = sumWindowColumn16(&state.v, j)
 	}
 
 	return nil
