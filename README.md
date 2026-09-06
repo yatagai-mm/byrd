@@ -47,7 +47,7 @@ if err := pcmData.WriteWAVFile("output.wav"); err != nil {
 
 See examples under example/ for further usage.
 
-### Benchmark result as of v0.2.1 with go-mp3
+### Benchmark result as of v0.2.2 with go-mp3
 hajimehoshi/go-mp3 is a widely used mp3 decoder in Go. Below is the comparison between Byrd and go-mp3 using `go bench`. The benchmark code is at bench/ directory.
 
 ```
@@ -55,17 +55,27 @@ goos: darwin
 goarch: arm64
 pkg: byrd-bench
 cpu: Apple M5 Pro
-BenchmarkDecode/byrd/440hz-18         	       3	 420815153 ns/op	   1.90 MB/s	  778426 B/op	   11979 allocs/op
-BenchmarkDecode/go-mp3/440hz-18       	       2	 652181104 ns/op	   1.22 MB/s	330493568 B/op	  832070 allocs/op
-BenchmarkDecode/byrd/alarm-18         	       7	 164389089 ns/op	   4.46 MB/s	  307681 B/op	    3266 allocs/op
-BenchmarkDecode/go-mp3/alarm-18       	       5	 212548875 ns/op	   3.45 MB/s	91341918 B/op	  225261 allocs/op
-BenchmarkDecode/byrd/song-18          	       2	 614878854 ns/op	   6.74 MB/s	  667600 B/op	    9933 allocs/op
-BenchmarkDecode/go-mp3/song-18        	       2	 756499666 ns/op	   5.48 MB/s	285375480 B/op	  693320 allocs/op
-BenchmarkDecode/byrd/synth-18         	      16	  70937271 ns/op	   4.33 MB/s	  194969 B/op	    1506 allocs/op
-BenchmarkDecode/go-mp3/synth-18       	      12	  94007573 ns/op	   3.27 MB/s	41537668 B/op	  102851 allocs/op
-BenchmarkDecode/byrd/circle-reading-18         	       1	21485354375 ns/op	   3.96 MB/s	25442296 B/op	  452201 allocs/op
-BenchmarkDecode/go-mp3/circle-reading-18       	       1	29656615750 ns/op	   2.87 MB/s	12753788648 B/op	31593992 allocs/op
+BenchmarkDecode/byrd/440hz-18         	      10	 204057212 ns/op	   3.91 MB/s	  778300 B/op	   11978 allocs/op
+BenchmarkDecode/go-mp3/440hz-18       	       4	 652273021 ns/op	   1.22 MB/s	330497584 B/op	  832078 allocs/op
+BenchmarkDecode/byrd/alarm-18         	      27	  85147840 ns/op	   8.62 MB/s	  307979 B/op	    3266 allocs/op
+BenchmarkDecode/go-mp3/alarm-18       	      10	 216952650 ns/op	   3.38 MB/s	91338072 B/op	  225259 allocs/op
+BenchmarkDecode/byrd/song-18          	       6	 337278694 ns/op	  12.29 MB/s	  668049 B/op	    9933 allocs/op
+BenchmarkDecode/go-mp3/song-18        	       3	 773389000 ns/op	   5.36 MB/s	285375106 B/op	  693318 allocs/op
+BenchmarkDecode/byrd/synth-18         	      61	  38471383 ns/op	   7.99 MB/s	  195112 B/op	    1506 allocs/op
+BenchmarkDecode/go-mp3/synth-18       	      24	  96969066 ns/op	   3.17 MB/s	41536080 B/op	  102851 allocs/op
+BenchmarkDecode/byrd/circle-reading-18         	       1	11725733917 ns/op	   7.25 MB/s	25442296 B/op	  452201 allocs/op
+BenchmarkDecode/go-mp3/circle-reading-18       	       1	29404069208 ns/op	   2.89 MB/s	12753788200 B/op	31593990 allocs/op
 ```
+
+The macOS results above are medians of three runs. Compared with go-mp3:
+
+| Test case | Byrd speedup | Allocation bytes reduction |
+| --- | ---: | ---: |
+| 440hz | 219.65% faster | 99.76% less |
+| alarm | 154.80% faster | 99.66% less |
+| song | 129.30% faster | 99.77% less |
+| synth | 152.06% faster | 99.53% less |
+| circle-reading | 150.77% faster | 99.80% less |
 
 ```
 goos: linux
