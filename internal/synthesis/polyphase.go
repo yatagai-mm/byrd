@@ -54,9 +54,17 @@ func SynthesizeSubbandSamples(in []float32, state *PolyphaseState, out []float32
 
 	var x [64]float32
 	inVec := (*[32]float32)(in)
-	for i := range 64 {
+	// Cosine symmetry leaves only 33 independent rows. Retain row 16's
+	// original dot product: its coefficients are mathematically zero, but
+	// the generated table contains small nonzero floating-point values.
+	for i := range 16 {
 		x[i] = dotProduct32(&synthesisMatrix[i], inVec)
+		x[32-i] = -x[i]
+		row := i + 33
+		x[row] = dotProduct32(&synthesisMatrix[row], inVec)
+		x[96-row] = x[row]
 	}
+	x[16] = dotProduct32(&synthesisMatrix[16], inVec)
 
 	copy(state.v[64:], state.v[:960])
 	copy(state.v[:64], x[:])
